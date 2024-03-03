@@ -25,6 +25,7 @@ datadir='.'    # directory where the data files reside
 dataset=['arial','bookman_old_style','century','comic_sans_ms','courier_new',
   'fixed_sys','georgia','microsoft_sans_serif','palatino_linotype',
   'shruti','tahoma','times_new_roman']
+testset=['veranda']
 datachar='abcdefghijklmnopqrstuvwxyz'
 
 def read_data():
@@ -43,6 +44,31 @@ def read_data():
     X=np.zeros((p,n))  # images arranged in columns of X
     k=0
     for dset in dataset:
+        for ch in datachar:
+            # fname='/'.join([datadir,dset,ch])+'.tif'
+            fname = os.path.join(os.path.dirname(__file__), dset + '/' + ch + '.tif')
+            im=Image.open(fname)
+            img = np.array(im)
+            X[:,k]=np.reshape(img,(1,p))
+            k+=1
+    return X
+
+def read_test_data():
+    """
+        Read in all test images into columns of a single matrix X.
+    
+        Returns:
+            X: Image column matrix.
+    
+    """
+    Rows=64    # all images are 64x64
+    Cols=64
+    n=len(testset)*len(datachar)  # total number of images
+    p=Rows*Cols   # number of pixels
+
+    X=np.zeros((p,n))  # images arranged in columns of X
+    k=0
+    for dset in testset:
         for ch in datachar:
             # fname='/'.join([datadir,dset,ch])+'.tif'
             fname = os.path.join(os.path.dirname(__file__), dset + '/' + ch + '.tif')

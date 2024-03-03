@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import misc
 
 from training_data import read_data
 
@@ -183,6 +182,7 @@ def eigenimages():
 def image_classify():
     # Read the training images
     X_train = read_data.read_data()
+    # (4096, 312) - columns of image data, every 26 is the same character
 
     # Compute the mean image over the entire dataset
     mu_hat = np.mean(X_train, axis=1, keepdims=True)
@@ -198,20 +198,27 @@ def image_classify():
 
     # Transform each of the original training images to a lower-dimensional representation
     Y_train = np.dot(A.T, X_centered_train)
+    # (10, 312) - reduced column vectors, 12 for each class
 
     # Compute class means and covariances for each of the 26 classes
     class_data = {}
     for i in range(26):
-        class_data[i] = {'mean': np.mean(Y_train[:, i*10:(i+1)*10], axis=1),
-                        'cov': np.cov(Y_train[:, i*10:(i+1)*10])}
+        class_cols = np.array(get_every_26th_column(Y_train, i))
+        # print(class_cols.shape)
+        class_mean = np.mean(class_cols, axis=1, keepdims=True)
+        # print(class_mean.shape)
+        class_cov = np.cov(class_cols, rowvar=True)
+        # col_sum = np.zeros((10, 10))
+        # for j in range (0, len(class_cols[0])):
+        #     col = np.array(class_cols[:, j])
+        #     col_sum += (np.matmul(col - class_mean, (col - class_mean).T))
+        # class_cov = col_sum / 25
+        # print(class_cov.shape)
+        class_data[i] = {'mean': class_mean, 'cov': class_cov}
 
     # Read the test images
-    X_test = []
-    for i in range(26):
-        image = plt.imread(f'test_data/veranda/{chr(97+i)}.tif')
-        X_test.append(image.flatten())
-
-    X_test = np.array(X_test).T
+    X_test = read_data.read_test_data()
+    # (4096, 26)
 
     # Use the same A and mu_hat!
     # Center the test data by subtracting the mean image
@@ -219,12 +226,15 @@ def image_classify():
 
     # Transform the test data to a lower-dimensional representation
     Y_test = np.dot(A.T, X_centered_test)
+    # (10, 26)
 
     # Classification
     misclassified = []
     for i in range(26):
-        diff = Y_test - class_data[i]['mean'][:, np.newaxis]
-        distances = np.sum(np.dot(diff.T, np.linalg.inv(class_data[i]['cov'])) * diff.T, axis=1)
+        distances = []
+        for j in range(26):
+            diff = Y_test[:, [i]] - class_data[j]['mean']
+            distances.append(diff.T @ np.linalg.inv(class_data[j]['cov']) @ diff + np.log(np.linalg.det(class_data[j]['cov'])))
         min_distance_index = np.argmin(distances)
         
         if min_distance_index != i:
@@ -236,43 +246,60 @@ def image_classify():
         print(f"Character '{item[0]}' misclassified as '{item[1]}'")
         
     # modified image classification section
-    # Initialize a list to store misclassified characters for each modification
-    misclassified_modifications = []
+    # 1. Let Bk = Λk
+    lambda_k = []
+    for i in range(26):
+        diag = np.diag(np.diag(class_data[i]['cov']))
+        lambda_k.append(diag)
+    misclassified_1 = classify(Y_test, class_data, lambda_k)
 
-    # Modification 1: Bk = Λk
-    Bk_mod1 = [np.diag(class_data[i]['cov']) for i in range(26)]
+    # 2. Let Bk = Rwc
+    Rwc = np.zeros((10, 10))
+    for i in range(26):
+        Rwc += class_data[i]['cov']
+    Rwc = Rwc / 26
+    Rwc_list = [Rwc.copy()] * 26
+    misclassified_2 = classify(Y_test, class_data, Rwc_list)
 
-    # Modification 2: Bk = Rwc
-    Rwc = np.mean([class_data[i]['cov'] for i in range(26)], axis=0)
-    Bk_mod2 = [Rwc] * 26
+    # 3. Let Bk = Λ (Diagonal of Rwc)
+    Rwc_diag_list = [np.diag(np.diag(Rwc)).copy()] * 26
+    misclassified_3 = classify(Y_test, class_data, Rwc_diag_list)
 
-    # Modification 3: Bk = Λ
-    Bk_mod3 = [np.diag(Rwc)] * 26
-
-    # Modification 4: Bk = I
-    Bk_mod4 = [np.eye(class_data[i]['cov'].shape[0]) for i in range(26)]
-
-    # Classify test data using each modification
-    for Bk, mod_name in [(Bk_mod1, 'Modification 1: Λk'), (Bk_mod2, 'Modification 2: Rwc'),
-                        (Bk_mod3, 'Modification 3: Λ'), (Bk_mod4, 'Modification 4: I')]:
-        misclassified = []
-        for i in range(26):
-            diff = Y_test - class_data[i]['mean'][:, np.newaxis]
-            distances = np.sum(np.dot(diff.T, np.linalg.inv(Bk[i])) * diff.T, axis=1)
-            min_distance_index = np.argmin(distances)
-            
-            if min_distance_index != i:
-                misclassified.append((chr(97 + i), chr(97 + min_distance_index)))
-        
-        # Append misclassified characters for this modification to the list
-        misclassified_modifications.append((mod_name, misclassified))
+    # 4. Let Bk = I
+    I = np.eye(10)
+    I_list = [I.copy()] * 26
+    misclassified_4 = classify(Y_test, class_data, I_list)
 
     # Display misclassified characters for each modification
-    for mod_name, misclassified in misclassified_modifications:
-        print(f"Misclassified characters for {mod_name}:")
-        for item in misclassified:
-            print(f"Character '{item[0]}' misclassified as '{item[1]}'")
-        print()
+    print("Misclassified characters with different Bk matrices:")
+    print("1. Bk = Λk:")
+    print(misclassified_1)
+    print("2. Bk = Rwc:")
+    print(misclassified_2)
+    print("3. Bk = Λ (Diagonal of Rwc):")
+    print(misclassified_3)
+    print("4. Bk = I:")
+    print(misclassified_4)
+        
+def classify(test_data, class_data, Bk):
+    misclassified = []
+    for i in range(26):
+        distances = []
+        for j in range(26):
+            diff = test_data[:, [i]] - class_data[j]['mean']
+            distances.append(diff.T @ np.linalg.inv(Bk[j]) @ diff + np.log(np.linalg.det(Bk[j])))
+        min_distance_index = np.argmin(distances)
+        
+        if min_distance_index != i:
+            misclassified.append((chr(97 + i), chr(97 + min_distance_index)))
+
+    return misclassified
+
+def get_every_26th_column(matrix, start_offset):
+    result = []
+    for i in range(start_offset, len(matrix[0]), 26):
+        result.append([row[i] for row in matrix])
+    return np.array(result).T
 
 if __name__ == "__main__":
     main()

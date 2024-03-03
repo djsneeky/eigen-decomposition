@@ -50,4 +50,49 @@ R_hat_whitened =
 
 ### Image Classification
 
+### Misclassification using Rk
 
+| Input Character | Classifier Output |
+| --------------- | ----------------- |
+| d               | a                 |
+| j               | y                 |
+| l               | i                 |
+| n               | v                 |
+| q               | a                 |
+| u               | a                 |
+| y               | v                 |
+
+### Misclassification of Bk variations
+
+#### Bk = lambda_k
+
+| Input Character | Classifier Output |
+| --------------- | ----------------- |
+| i               | l                 |
+| y               | v                 |
+
+#### Bk = Rwc
+
+| Input Character | Classifier Output |
+| --------------- | ----------------- |
+| g               | q                 |
+| y               | v                 |
+
+#### Bk = Diagonal of Rwc
+
+| Input Character | Classifier Output |
+| --------------- | ----------------- |
+| f               | t                 |
+| y               | v                 |
+
+#### Bk = I
+
+| Input Character | Classifier Output |
+| --------------- | ----------------- |
+| f               | t                 |
+| g               | q                 |
+| y               | v                 |
+
+### Tradeoff of data model accuracy vs estimate accuracy
+
+The more complex the covariance model, the better it may fit the training data. But this may also lead to overfitting and poor generalization for unseen data. Simplifying the covariance model can reduce variance, but may introduce bias. The trade-off invovles finding the right balance between model complexity and available data, aiming to achieve a model that captures the data distribution while remaining general to unseen data.
